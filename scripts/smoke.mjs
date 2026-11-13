@@ -14,6 +14,8 @@ for (const [file, count] of [[sample, 5], [second, 2]]) {
 }
 const original = await readFile(sample);
 let choices = [sample], destination = null, savedSession = null, confirmed = true;
+let closeChoice = 'discard', writeDelay = 0, writePending = false;
+let preferences = { settings: { theme: 'system', openMode: 'tab', restore: true }, recent: [] };
 const server = await createServer({ server: { port: 0, strictPort: false } }); await server.listen();
 let browser, page;
 try {
@@ -23,20 +25,33 @@ try {
   page.on('console', message => { if (message.type() === 'error') console.error('BROWSER:', message.text()); });
   await page.exposeFunction('mockInvoke', async (command, args = {}) => {
     switch (command) {
-      case 'load_session': return savedSession;
+      case 'load_session': return { windowId: 1, views: {}, tabs: [], ...savedSession, ...preferences };
       case 'store_session': savedSession = args.value; return;
+      case 'list_windows': return [{ id: 1, title: 'Folio PDF' }];
+      case 'claim_pdf': return true;
+      case 'watch_pdf': case 'release_pdf': return;
+      case 'pending_paths': case 'pending_transfers': return [];
+      case 'remember_pdf': preferences.recent = [{ path: args.path, name: args.name }, ...preferences.recent.filter(r => r.path !== args.path)].slice(0, 12); return preferences;
+      case 'preferences': if (args.value.clearHistory) preferences.recent = []; else Object.assign(preferences.settings, args.value); return preferences;
       case 'choose_files': return choices;
       case 'read_pdf': return Array.from(await readFile(args.path));
       case 'choose_destination': return destination;
-      case 'write_pdf': assert.equal(path.dirname(args.path), output); await writeFile(args.path, new Uint8Array(args.data)); return;
+      case 'write_pdf': { const file = JSON.parse(args.headers['folio-path']); assert.equal(path.dirname(file), output); writePending = true; if (writeDelay) await new Promise(resolve => setTimeout(resolve, writeDelay)); await writeFile(file, new Uint8Array(args.data)); writePending = false; return; }
       case 'confirm': return confirmed;
+      case 'confirm_close': return confirmed ? closeChoice : 'cancel';
       default: throw new Error(`Unexpected native command: ${command}`);
     }
   });
   // Substitute only the native module. UI, bridge, PDF.js and PDF workers are real.
   await page.route('**/src/native.ts', route => route.fulfill({ contentType: 'application/javascript', body: `
-    export const native = {
-      invoke: async (command, args) => { const value = await window.mockInvoke(command, args); return command === 'read_pdf' ? new Uint8Array(value).buffer : value; },
+    const listeners = new Map();
+    const invoke = async (command, args) => {
+      const value = await window.mockInvoke(command, args);
+      if (command === 'preferences' || command === 'remember_pdf') listeners.get('folio-preferences')?.(value);
+      return command === 'read_pdf' ? new Uint8Array(value).buffer : value;
+    };
+    export const native = { invoke, binary: (command, data, headers) => invoke(command, { data: Array.from(data), headers }),
+      listen: async (event, fn) => { listeners.set(event, fn); return () => listeners.delete(event); }, onDrop: async () => () => {}, onBounds: async () => () => {},
       close: async () => {}, minimize: async () => {}, maximize: async () => {}, drag: async () => {}, onClose: async () => () => {}
     };` }));
   const poll = async fn => {
@@ -71,11 +86,29 @@ try {
   await poll(async () => (await window.folio.snapshot()).docs[0].pages.length === 4);
   await page.getByRole('button', { name: '元に戻す', exact: true }).click();
   await poll(async () => (await window.folio.snapshot()).docs[0].pages.length === 5);
+  const orderBeforeDrag = (await state()).docs[0].pages.map(p => p.id);
+  const dragFrom = await page.locator('.page-grid .thumbnail').nth(0).boundingBox(), dragTo = await page.locator('.page-grid .thumbnail').nth(2).boundingBox();
+  await page.mouse.move(dragFrom.x + dragFrom.width / 2, dragFrom.y + dragFrom.height / 2); await page.mouse.down();
+  await page.mouse.move(dragTo.x + dragTo.width / 2, dragTo.y + dragTo.height / 2, { steps: 8 }); await page.mouse.up();
+  await poll(async () => (await window.folio.snapshot()).docs[0].pages[0].source !== 1);
+  assert.notDeepEqual((await state()).docs[0].pages.map(p => p.id), orderBeforeDrag);
+  await page.getByRole('button', { name: '元に戻す', exact: true }).click();
+  assert.deepEqual((await state()).docs[0].pages.map(p => p.id), orderBeforeDrag);
   await page.screenshot({ path: path.join(output, 'organize.png') });
   const id = (await state()).active;
   confirmed = false;
   assert.equal(await page.evaluate(id => window.folio.close(id), id), false);
   confirmed = true;
+  closeChoice = 'save'; destination = path.join(output, 'closing-save.pdf'); writeDelay = 400;
+  const closing = page.evaluate(id => window.folio.close(id), id);
+  const writeDeadline = Date.now() + 30000;
+  while (!writePending && Date.now() < writeDeadline) await new Promise(resolve => setTimeout(resolve, 20));
+  assert.equal(writePending, true, 'close/save must reach the binary write stage');
+  await page.evaluate(async id => { const doc = (await window.folio.snapshot()).docs.find(d => d.id === id); await window.folio.edit(id, { type: 'rotate', ids: [doc.pages[0].id], delta: 90 }); }, id);
+  assert.equal(await closing, false, 'changes made during save must keep the original tab open');
+  const savedCopy = (await state()).docs.find(d => d.name === 'closing-save.pdf');
+  await page.evaluate(async ({ original, copy }) => { await window.folio.close(copy, true); await window.folio.activate(original); await window.folio.edit(original, { type: 'undo' }); }, { original: id, copy: savedCopy.id });
+  closeChoice = 'discard'; writeDelay = 0;
   destination = null;
   assert.equal(await page.evaluate(id => window.folio.save(id), id), false);
   destination = sample;

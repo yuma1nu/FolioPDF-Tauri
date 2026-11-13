@@ -2,6 +2,6 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "main",
   "description": "Only the local main window may control its title bar.",
-  "windows": ["main"],
+  "windows": ["main", "folio-*", "print-*"],
   "permissions": ["core:default", "core:window:allow-minimize", "core:window:allow-toggle-maximize", "core:window:allow-close", "core:window:allow-destroy", "core:window:allow-start-dragging"]
 }

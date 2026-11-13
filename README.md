@@ -1,65 +1,62 @@
-# Folio PDF · Tauri 試作版
+# Folio PDF
 
-Electron 版の React 画面と PDF.js の描画処理を引き継いだ、Windows 向け Tauri 2 の試作です。Electron プロセスを使用せず、Windows WebView2 上で動作します。Electron 版とは別のアプリ識別子・設定保存先を使います。
+Windows 11 向けのローカル PDF ビューアです。PDF の閲覧・ページ整理・抽出／結合・印刷に対応します。Tauri 2、React、PDF.js を使用し、ファイルを外部へ送信しません。
 
-## ダウンロード
+## 起動
 
-[Releases](https://github.com/yuma1nu/FolioPDF-Tauri/releases) から Windows x64 用の `Folio.PDF.Tauri_0.1.0_x64-setup.exe` をダウンロードして実行してください。試作版のためプレリリースとして公開しています。インストーラーは未署名です。初回起動には WebView2 Runtime が必要で、未導入の場合はセットアップがダウンロードします。
+[v1.0.0 のリリース](https://github.com/yuma1nu/FolioPDF-Tauri/releases/tag/v1.0.0) から Windows x64 用の `Folio.PDF_1.0.0_x64-setup.exe` をダウンロードして実行してください。インストールされるアプリ名、スタートメニューとショートカットの名前は `Folio PDF` です。WebView2 Runtime が必要です。インストーラーと実行ファイルは未署名です。
 
-変更内容と制限は [v0.1.0 リリースノート](docs/release-notes-0.1.0.md) を参照してください。
+インストーラーの SHA-256 は同じリリースの `SHA256SUMS.txt` で確認できます。ローカルでビルドした場合は `src-tauri/target/release/bundle/nsis/Folio PDF_1.0.0_x64-setup.exe`、インストールせずに試す場合は `src-tauri/target/release/folio-pdf.exe` を使用します。
 
-## 起動とビルド
+## 操作
 
-Node.js 24 以降、pnpm、Rust stable（MSVC）、Visual Studio の「C++ によるデスクトップ開発」と Windows SDK、WebView2 Runtime が必要です。Windows のビルドスクリプトは `vswhere` で C++ ツールのある Visual Studio を探し、開発環境と Rustup の PATH を設定します。
+- Ctrl+O、エクスプローラーからのドロップ、関連付け後のダブルクリックで PDF を開きます。追加起動したファイルは既存アプリへ渡します。
+- サムネイルやページ番号で移動。Ctrl+F で文書全体を検索します。
+- Ctrl+ホイールで 25〜1600% の拡大縮小。Space+ドラッグや中ボタンドラッグで移動します。
+- 「ページ整理」で回転・並べ替え・削除・抽出。Ctrl／Shift で複数選択。ドラッグまたは前後移動ボタンで並べ替え、Undo／Redo が使えます。
+- Ctrl+S で別名保存。原本と読み込み済み PDF への上書きを拒否し、一時ファイル経由で保存します。
+- 「結合」で複数 PDF を指定順にまとめます。タブの未保存編集は含めません。
+- 右上の矢印から別ウィンドウへ移動・取り込み。未保存編集、Undo／Redo、検索語、選択、閲覧位置を保持します。受け渡しに失敗した場合は元のタブを保持します。
+- Ctrl+P で現在のページ構成を印刷用ウィンドウへ準備し、「印刷ダイアログを開く」から Windows の印刷ダイアログを表示します。用紙・倍率・両面・プリンターはそこで選びます。
+- 設定でライト／ダーク／OS の外観、タブ／別ウィンドウの既定動作、セッション復元を変更します。
+- 閉じる際の未保存編集は「保存／破棄／キャンセル」から選びます。保存ダイアログをキャンセルした場合は閉じません。
+
+## ファイルとセッション
+
+開いた PDF の元データはメモリー内に保持します。原本の更新・削除・切断をバックグラウンドで検知し、表示と編集を維持したまま通知します。未編集のタブは再読み込みできます。編集中の場合は別名保存してから開き直してください。ネットワーク共有の応答が遅い場合、変更通知も遅れることがあります。
+
+タブ、アクティブな文書、閲覧位置、ウィンドウの位置・サイズ、設定と最近使ったファイルを復元します。同じ PDF を複数のウィンドウから開くと既存のタブへ移動します。試作版の設定形式を自動変換します。壊れた JSON 設定は別ファイルへ退避して初期状態で起動します。
+
+保存済みファイルが復元対象です。未保存編集の異常終了からの復旧、Electron 版の設定の移行には対応しません。設定を含む保存先はアプリ固有の領域で、Electron 版とは分かれています。
+
+## 対象外と制限
+
+- OCR、本文の直接編集、注釈の作成、電子署名検証、フォーム入力・保存、クラウド同期は対象外です。
+- 暗号化・署名・権限制限・未対応形式の PDF は閲覧中心です。
+- ページ編集・抽出・結合では、しおり・フォーム・注釈・内部リンクを完全には保持できない場合があり、保存前に案内します。
+- 印刷はページを最大 150dpi の画像として準備します。大判ページではメモリー上限に合わせて解像度を下げます。プリンター固有の余白、両面、混在用紙サイズなどは実機での確認が必要です。
+- 大きな PDF では元データと描画キャッシュに相応のメモリーを使います。保存・印刷・ウィンドウ間移動はバイナリ IPC を使い、PDF 処理はワーカーで実行します。
+- 自動更新・コード署名は未導入です。OS の既定 PDF アプリは Windows の設定から選びます。
+
+## 開発と検証
+
+Node.js 24 以降、pnpm、Rust stable（MSVC）、Visual Studio の「C++ によるデスクトップ開発」、Windows SDK、WebView2 Runtime が必要です。
 
 ```powershell
-git clone https://github.com/yuma1nu/FolioPDF-Tauri.git
-cd FolioPDF-Tauri
 pnpm install --frozen-lockfile
-pnpm dev             # ネイティブウィンドウを開く
-pnpm build           # TypeScript 検証と画面のビルド
-pnpm build:desktop   # リリース実行ファイルを生成
-pnpm dist:win        # NSIS インストーラーを生成
-```
-
-実行ファイルは `src-tauri/target/release/folio-pdf-tauri.exe`、インストーラーは `src-tauri/target/release/bundle/nsis/` に出力されます。`pnpm dev:web` は画面の開発サーバーだけを起動します。通常のブラウザーからネイティブ機能は利用できません。
-
-## 試作で対応した機能
-
-- Ctrl+O／ファイル選択／ドロップによる PDF 読み込み、複数タブ。
-- PDF.js による描画、サムネイル、ページ移動、全文検索、倍率変更、Space+ドラッグ。
-- ページの回転・並べ替え・削除、Undo／Redo、ページ抽出、複数 PDF の結合。
-- Ctrl+S で別名保存。原本と読み込み済みファイルへの上書きを拒否し、一時ファイル経由で保存。
-- ライト／ダーク／OS の外観、最近開いたファイル、タブと閲覧位置の復元、履歴消去。
-- 未保存編集を閉じる際の破棄確認。保存したい場合は確認をキャンセルして Ctrl+S を実行。
-- パスワード付き PDF の閲覧。暗号化・署名・権限制限・未対応形式は編集を制限。
-
-## Electron 版との差分・制限
-
-- 単一ウィンドウの試作です。別ウィンドウへの移動、ウィンドウ間転送、印刷は未対応です。
-- OS の PDF 関連付け、コマンドラインからの PDF オープン、単一起動制御、外部でのファイル変更監視は未実装です。
-- ドロップした PDF は WebView の File API でメモリーに読み込みます。パスを取得しないため、最近使ったファイルや起動時復元には含めません。
-- 未保存編集は再起動時に復元しません。復元対象は保存済みファイルと閲覧位置です。Electron 版の履歴は移行しません。
-- ページ編集・抽出・結合では、しおり・フォーム・注釈・内部リンクなどを完全には保持できません。保存前に確認します。
-- PDF.js と pdf-lib のデータをメモリーに保持します。大きな PDF の保存では IPC の配列転送も使うため、メモリー使用量の最適化は今後の課題です。
-- インストーラーと実行ファイルは未署名です。
-
-## 構成と検証
-
-`src/bridge.ts` がタブ・編集履歴・セッションを管理し、既存 UI の `window.folio` API を実装します。`src/pdf-worker.ts` が PDF の検査・出力・結合を Web Worker で実行します。Rust 側の `src-tauri/src/main.rs` はダイアログ、許可済み PDF の読み取り、保存先を選択した PDF の書き込み、設定の永続化を担当します。任意パスへアクセスする汎用ファイルシステム権限はフロント側に与えていません。
-
-```powershell
+pnpm dev
+pnpm build
+pnpm build:desktop
+pnpm dist:win
 pnpm test
 pnpm test:smoke
 pnpm check:rust
 pnpm test:rust
-pnpm test:native     # build:desktop 後、実 WebView2 と Rust IPC を確認
+pnpm test:native
 ```
 
-`test:smoke` は Edge のヘッドレスブラウザーを使い、ファイルダイアログなどのネイティブ境界だけをテスト用に差し替えます。実際の PDF.js、画面、ブリッジ、PDF ワーカーを動かして、表示・検索・編集・保存・抽出・結合・復元を確認します。ネイティブダイアログと実 WebView2 での確認は別途必要です。スクリーンショットと検証用 PDF は `test-results/` に生成します。
+`dev:web` は画面の開発サーバーだけを起動します。通常のブラウザーからネイティブ機能は利用できません。`test:smoke` はネイティブ境界を差し替え、実際の画面・PDF.js・ワーカーで PDF の表示、編集、保存、抽出、結合を検証します。
 
-`test:native` はリリース実行ファイルを起動し、実際の WebView2 で PDF 表示・検索、CSP とワーカー、Rust IPC 経由のセッション保存、ウィンドウ終了を確認します。実ダイアログの操作は含みません。`FOLIO_USER_DATA` で設定保存先を、`WEBVIEW2_USER_DATA_FOLDER` で WebView のデータ保存先をテスト専用ディレクトリへ分けています。
+`test:native` はリリース実行ファイルを独立した設定・WebView プロファイルで起動し、追加起動、ウィンドウ間移動、外部変更、セッション復元、印刷用ページを検証します。印刷テストは CDP で PDF 出力し、実プリンターへ送信しません。他に Folio PDF が起動していない状態で実行してください。テスト成果物は `test-results/` に保存します。
 
-Tauri 設定の参照：[Vite](https://v2.tauri.app/start/frontend/vite/)、[Dialog](https://v2.tauri.app/plugin/dialog/)、[Configuration](https://v2.tauri.app/reference/config/)。
-
-実行済みの検証は [VALIDATION.md](VALIDATION.md) を参照してください。
+内部構成は [architecture.md](docs/architecture.md)、実施済みの検証は [VALIDATION.md](VALIDATION.md)、変更点は [1.0.0 リリースノート](docs/release-notes-1.0.0.md) を参照してください。

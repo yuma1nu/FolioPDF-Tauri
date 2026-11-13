@@ -1,10 +1,10 @@
-# Folio PDF Tauri v0.1.0
+# Folio PDF v0.1.0
 
 Windows x64 向け Tauri 2 試作版の初回プレリリースです。React + PDF.js の画面を Windows WebView2 上で動かします。
 
 ## インストール
 
-Assets の `Folio.PDF.Tauri_0.1.0_x64-setup.exe` をダウンロードして実行してください。インストーラーと実行ファイルは未署名です。WebView2 Runtime が必要です。未導入の場合はセットアップがダウンロードするため、インターネット接続が必要です。
+Assets の Windows x64 用インストーラーをダウンロードして実行してください。インストーラーと実行ファイルは未署名です。WebView2 Runtime が必要です。未導入の場合はセットアップがダウンロードするため、インターネット接続が必要です。
 
 `SHA256SUMS.txt` にはインストーラーの SHA-256 を掲載しています。
 

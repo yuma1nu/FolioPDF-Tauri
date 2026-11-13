@@ -8,3 +8,4 @@
 .viewer-container > .pdfViewer{width:max-content;min-width:100%}
 .save-state{display:inline-flex;align-items:center;justify-content:center;gap:5px;white-space:nowrap;flex-shrink:0;color:var(--muted);font-size:9px;margin-left:8px}.home-toolbar{height:42px}
 @media(max-width:1050px){.save-state-label{display:none}.save-state{margin-left:4px}}
+.page-grid .thumbnail{touch-action:none}.page-dragging,.page-dragging .thumbnail{cursor:grabbing!important}
