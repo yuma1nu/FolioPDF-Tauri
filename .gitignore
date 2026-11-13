@@ -1,0 +1,14 @@
+node_modules/
+dist/
+public/pdf-assets/
+src-tauri/target/
+src-tauri/gen/
+test-results/
+release/
+*.log
+.env
+.env.*
+!.env.example
+*.pem
+*.pfx
+*.p12

@@ -1,0 +1,27 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Folio PDF Tauri",
+  "version": "0.1.0",
+  "identifier": "jp.folio.pdfviewer.tauri",
+  "build": {
+    "beforeDevCommand": "pnpm dev:web",
+    "beforeBuildCommand": "pnpm build",
+    "devUrl": "http://127.0.0.1:1427",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [{ "label": "main", "title": "Folio PDF · Tauri", "width": 1280, "height": 850, "minWidth": 900, "minHeight": 600, "decorations": false, "dragDropEnabled": false }],
+    "security": {
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data:; font-src 'self' blob: data:; worker-src 'self' blob:; connect-src ipc: http://ipc.localhost; object-src 'none'; frame-src 'none'; base-uri 'self'",
+      "devCsp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data:; font-src 'self' blob: data:; worker-src 'self' blob:; connect-src ipc: http://ipc.localhost http://127.0.0.1:1427 ws://127.0.0.1:1427; object-src 'none'; frame-src 'none'; base-uri 'self'"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["nsis"],
+    "icon": ["../assets/icon.ico", "../assets/icon.png"],
+    "resources": ["../THIRD_PARTY_NOTICES.txt"],
+    "windows": { "nsis": { "languages": ["Japanese", "English"], "displayLanguageSelector": true } }
+  }
+}
+
