@@ -2,6 +2,8 @@
 
 mod runtime;
 mod printing;
+#[cfg(windows)]
+mod native_printer;
 use serde_json::json;
 use std::{collections::{HashMap, HashSet}, fs, io::Write, path::{Path, PathBuf}, sync::Mutex, time::{Duration, UNIX_EPOCH}};
 use tauri::{Emitter, Manager, State, WebviewWindow};
@@ -118,7 +120,9 @@ fn main() {
         .invoke_handler(tauri::generate_handler![choose_files,read_pdf,watch_pdf,choose_destination,write_pdf,confirm,confirm_close,external,
             runtime::load_session,runtime::store_session,runtime::preferences,runtime::remember_pdf,runtime::list_windows,runtime::create_window,runtime::pending_paths,
             runtime::locate_pdf,runtime::claim_pdf,runtime::release_pdf,runtime::prepare_transfer,runtime::transfer_document,runtime::pending_transfers,runtime::read_transfer,runtime::acknowledge_transfer,runtime::cancel_transfer,
-            printing::print_begin,printing::print_page,printing::print_end,printing::print_cancel,printing::print_payload,printing::read_print_page,printing::show_print])
+            printing::print_begin,printing::print_source,printing::print_cancel,printing::print_payload,printing::read_print_source,
+            printing::prepare_print,printing::print_page,printing::read_print_page,printing::cancel_print_preparation,
+            printing::get_printers,printing::select_printer,printing::driver_properties,printing::direct_print,printing::cancel_direct_print])
         .run(tauri::generate_context!()).expect("Folio PDF could not start");
 }
 #[cfg(test)]

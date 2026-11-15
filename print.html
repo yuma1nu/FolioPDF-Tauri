@@ -1,1 +1,43 @@
-<!doctype html><html lang="ja"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><title>印刷 — Folio PDF</title></head><body><header><strong id="title">印刷を準備しています…</strong><button id="print" disabled>印刷ダイアログを開く</button><button id="close">閉じる</button><span id="status"></span></header><main id="pages"></main><script type="module" src="/src/print.ts"></script></body></html>
+<!doctype html>
+<html lang="ja"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><title>印刷 — Folio PDF</title></head>
+<body>
+  <header class="print-header"><div><span class="brand">Folio PDF</span><strong id="title">印刷</strong></div><button id="close" class="subtle">閉じる</button></header>
+  <div class="print-workspace">
+    <aside class="print-options">
+      <div class="options-scroll">
+      <h1>印刷</h1>
+      <fieldset id="printer-options">
+        <legend>プリンター</legend>
+        <div class="printer-row"><select id="printer" aria-label="プリンター" disabled><option value="">読み込み中…</option></select><button id="refresh-printers" type="button" title="プリンター一覧を更新">更新</button></div>
+        <button id="driver-settings" type="button" disabled>ドライバー設定…</button>
+        <p id="printer-status" class="hint" role="status">プリンター一覧を読み込んでいます…</p>
+        <label class="field-label" for="print-scale">印刷倍率</label>
+        <select id="print-scale"><option value="fit">用紙に合わせる</option><option value="actual">実際のサイズ（100%）</option></select>
+      </fieldset>
+      <fieldset id="options" disabled>
+        <legend>印刷するページ</legend>
+        <label class="radio"><input type="radio" name="range-mode" id="all" value="all" checked/>すべてのページ</label>
+        <label class="radio"><input type="radio" name="range-mode" id="custom" value="custom"/>指定ページ</label>
+        <label class="field-label" for="range">ページ番号</label>
+        <input id="range" type="text" placeholder="例：1-3, 5, 8-10" autocomplete="off" disabled aria-describedby="range-hint range-error"/>
+        <p id="range-hint" class="hint">カンマで区切るか、ハイフンで範囲を指定します。</p>
+        <p id="range-error" class="error" role="alert"></p>
+        <button id="clear" class="text-button" type="button">選択を解除</button>
+      </fieldset>
+      </div>
+      <div class="print-actions">
+      <div id="selection-count" class="selection-count" aria-live="polite">ページを読み込んでいます…</div>
+      <button id="print" class="primary" disabled>選択したページを印刷</button>
+      <button id="cancel" hidden>準備をキャンセル</button>
+      <progress id="progress" hidden></progress>
+      <p id="status" role="status" aria-live="polite">印刷画面を開いています…</p>
+      </div>
+    </aside>
+    <main class="print-preview">
+      <div class="preview-heading"><h2>ページを選択</h2><p id="preview-state">軽量なプレビューを表示します。</p></div>
+      <div id="pages" class="preview-grid" aria-label="印刷ページのプレビュー"></div>
+    </main>
+  </div>
+  <div id="print-pages" aria-hidden="true"></div>
+  <script type="module" src="/src/print.ts"></script>
+</body></html>

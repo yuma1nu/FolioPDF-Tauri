@@ -82,7 +82,7 @@ export default function App() {
   const [merging, setMerging] = useState<{ path: string; name: string; count: number }[]>([]);
   const [busy, setBusy] = useState(''), [toast, setToast] = useState(''), [drop, setDrop] = useState(false), [reload, setReload] = useState(0);
   const [password, setPassword] = useState<{ retry: boolean; resolve: (value: string) => void; reject: () => void } | null>(null), [passwordValue, setPasswordValue] = useState('');
-  const controller = useRef<ViewerController | null>(null), dragIds = useRef<string[]>([]), anchor = useRef(0), searchInput = useRef<HTMLInputElement>(null), current = useRef(state), printCancelled = useRef(false);
+  const controller = useRef<ViewerController | null>(null), dragIds = useRef<string[]>([]), anchor = useRef(0), searchInput = useRef<HTMLInputElement>(null), current = useRef(state);
   current.current = state;
   const doc = state.docs.find(d => d.id === state.active);
   const source = loadedSource?.id === doc?.id ? loadedSource : null;
@@ -131,30 +131,7 @@ export default function App() {
   };
   const save = () => { if (doc) void run(() => api.save(doc.id), 'PDFを保存しています…'); };
   const print = async () => {
-    if (!doc || !source || !source.printAllowed) return;
-    printCancelled.current = false; let job = '';
-    try {
-      setBusy('印刷を準備しています…'); job = await api.printBegin(doc.id);
-      const pages = doc.pages.map(p => ({ ...p }));
-      for (let index = 0; index < pages.length; index++) {
-        if (printCancelled.current) break;
-        setBusy(`印刷を準備しています… ${index + 1} / ${pages.length}`);
-        const page = await source.pdf.getPage(pages[index].source + 1);
-        const bounds = page.getViewport({ scale: 1, rotation: pages[index].rotation });
-        const scale = Math.min(150 / 72, 8192 / bounds.width, 8192 / bounds.height, Math.sqrt(24_000_000 / (bounds.width * bounds.height)));
-        const viewport = page.getViewport({ scale, rotation: pages[index].rotation });
-        const paper = page.getViewport({ scale: 1, rotation: pages[index].rotation });
-        const canvas = document.createElement('canvas'); canvas.width = Math.ceil(viewport.width); canvas.height = Math.ceil(viewport.height);
-        await page.render({ canvas, viewport, intent: 'print' }).promise;
-        const blob = await new Promise<Blob>((resolve, reject) => canvas.toBlob(value => value ? resolve(value) : reject(new Error('印刷画像を作成できませんでした。')), 'image/png'));
-        await api.printPage(job, index, new Uint8Array(await blob.arrayBuffer()), paper.width, paper.height);
-        canvas.width = canvas.height = 0;
-        await new Promise(resolve => setTimeout(resolve, 0));
-      }
-      if (printCancelled.current) { await api.printCancel(job); job = ''; setToast('印刷準備をキャンセルしました'); }
-      else { setBusy('印刷ダイアログで設定してください'); const message = await api.printEnd(job); job = ''; setToast(message); }
-    } catch (e) { notify(e); if (job) await api.printCancel(job).catch(() => {}); }
-    finally { setBusy(''); }
+    if (doc && source?.printAllowed) await run(() => api.print(doc.id, source.password), '印刷画面を開いています…');
   };
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -212,8 +189,8 @@ export default function App() {
     </div>
     {drop && <div className="drop-overlay"><FolderOpen size={40}/><h2>PDFをここにドロップ</h2><p>複数のファイルもまとめて開けます</p></div>}
     {toast && <div role="status" className="toast"><span>{toast}</span><Button icon={X} title="通知を閉じる" onClick={() => setToast('')}/></div>}
-    {busy && <div className="busy-overlay"><LoaderCircle className="spin" size={23}/><span>{busy}</span>{(busy.startsWith('印刷を準備') || busy.startsWith('PDFを結合')) && <button onClick={() => { if (busy.startsWith('PDFを結合')) void api.cancelMerge(); else printCancelled.current = true; }}>キャンセル</button>}</div>}
-    {modal === 'settings' && <Modal title="設定" close={() => setModal(null)}><div className="modal-body"><h3>外観</h3><p className="muted">PDFの紙面は元の色のまま表示します。</p><div className="theme-options">{([{ value: 'light', label: 'ライト', icon: Sun }, { value: 'dark', label: 'ダーク', icon: Moon }, { value: 'system', label: 'OSに合わせる', icon: Monitor }] as const).map(item => <button key={item.value} className={state.settings.theme === item.value ? 'selected' : ''} onClick={() => { void api.settings({ theme: item.value }); }}><item.icon size={22}/><span>{item.label}</span></button>)}</div><h3>PDFの開き方</h3><select value={state.settings.openMode} onChange={e => { void api.settings({ openMode: e.target.value as 'tab' | 'window' }); }}><option value="tab">新しいタブで開く</option><option value="window">別ウィンドウで開く</option></select><label className="setting-check"><input type="checkbox" checked={state.settings.restore} onChange={e => { void api.settings({ restore: e.target.checked }); }}/> 前回のタブ・ウィンドウ・閲覧位置を復元する</label><h3>履歴とプライバシー</h3><p className="muted">すべての処理はローカルで行います。未保存編集の異常終了からの復旧は対象外です。</p><button className="button bordered" onClick={() => { void run(async () => { if (await api.confirm('最近開いたファイルと閲覧位置の履歴を消去しますか？')) await api.clearHistory(); }); }}>閲覧履歴を消去</button><div className="about">Folio PDF 1.0.0</div></div></Modal>}
+    {busy && <div className="busy-overlay"><LoaderCircle className="spin" size={23}/><span>{busy}</span>{busy.startsWith('PDFを結合') && <button onClick={() => { void api.cancelMerge(); }}>キャンセル</button>}</div>}
+    {modal === 'settings' && <Modal title="設定" close={() => setModal(null)}><div className="modal-body"><h3>外観</h3><p className="muted">PDFの紙面は元の色のまま表示します。</p><div className="theme-options">{([{ value: 'light', label: 'ライト', icon: Sun }, { value: 'dark', label: 'ダーク', icon: Moon }, { value: 'system', label: 'OSに合わせる', icon: Monitor }] as const).map(item => <button key={item.value} className={state.settings.theme === item.value ? 'selected' : ''} onClick={() => { void api.settings({ theme: item.value }); }}><item.icon size={22}/><span>{item.label}</span></button>)}</div><h3>PDFの開き方</h3><select value={state.settings.openMode} onChange={e => { void api.settings({ openMode: e.target.value as 'tab' | 'window' }); }}><option value="tab">新しいタブで開く</option><option value="window">別ウィンドウで開く</option></select><label className="setting-check"><input type="checkbox" checked={state.settings.restore} onChange={e => { void api.settings({ restore: e.target.checked }); }}/> 前回のタブ・ウィンドウ・閲覧位置を復元する</label><h3>履歴とプライバシー</h3><p className="muted">すべての処理はローカルで行います。未保存編集の異常終了からの復旧は対象外です。</p><button className="button bordered" onClick={() => { void run(async () => { if (await api.confirm('最近開いたファイルと閲覧位置の履歴を消去しますか？')) await api.clearHistory(); }); }}>閲覧履歴を消去</button><div className="about">Folio PDF 1.2.0</div></div></Modal>}
     {modal === 'extract' && doc && <Modal title="ページを抽出・分割" close={() => setModal(null)}><div className="modal-body"><p>指定したページを1つの別PDFとして保存します。現在の並び順と回転が反映されます。</p><label className="field-label">ページ範囲（全{doc.pages.length}ページ）</label><input className="text-input" autoFocus placeholder="例：1-3, 5, 8-10" value={range} onChange={e => { setRange(e.target.value); setRangeError(''); }}/>{rangeError && <p className="error">{rangeError}</p>}<p className="muted small">元のPDFからページは削除されません。</p><div className="modal-actions"><button className="button" onClick={() => setModal(null)}>キャンセル</button><button className="primary" onClick={() => { try { const ids = parseRange(range, doc.pages.length).map(i => doc.pages[i].id); setModal(null); void run(() => api.save(doc.id, ids), 'ページを抽出しています…'); } catch(e) { setRangeError(errorText(e)); } }}>別PDFに保存</button></div></div></Modal>}
     {modal === 'merge' && <Modal title="PDFを結合" close={() => setModal(null)} wide><div className="modal-body"><p>ファイルを追加し、結合する順番に並べてください。</p><p className="muted small">保存済みのPDFを使います。タブの未保存編集は含まれません。</p><div className="merge-list">{merging.map((item, i) => <div className="merge-row" key={`${item.path}:${i}`}><span className="muted">{i+1}</span><FileText size={18}/><div title={item.path}><strong>{item.name}</strong><small>{item.count ? `${item.count}ページ` : '暗号化・未対応PDF'}</small></div><Button icon={ArrowUp} title="上へ" disabled={i === 0} onClick={() => setMerging(items => { const copy = [...items]; [copy[i-1],copy[i]]=[copy[i],copy[i-1]]; return copy; })}/><Button icon={ArrowDown} title="下へ" disabled={i === merging.length-1} onClick={() => setMerging(items => { const copy = [...items]; [copy[i],copy[i+1]]=[copy[i+1],copy[i]]; return copy; })}/><Button icon={X} title="除外" onClick={() => setMerging(items => items.filter((_, n) => n !== i))}/></div>)}</div><button className="button bordered" onClick={() => { void api.chooseMerge().then(items => setMerging(previous => [...previous, ...items])).catch(notify); }}><Plus size={15}/> PDFを追加</button><div className="modal-actions"><span className="muted small">{merging.length}ファイル · {merging.reduce((n,p) => n+p.count, 0)}ページ</span><button className="primary" disabled={merging.length < 2 || merging.some(p => !p.count)} onClick={() => { const paths = merging.map(p => p.path); setModal(null); void run(() => api.merge(paths), 'PDFを結合しています…'); }}>結合して保存</button></div></div></Modal>}
     {modal === 'move' && doc && <Modal title="ウィンドウへ移動" close={() => setModal(null)}><div className="modal-body"><p className="muted">閲覧位置と未保存の編集を維持して移動します。</p><button className="move-option" onClick={() => { setModal(null); void run(() => api.move(doc.id), 'ウィンドウへ移動しています…'); }}><PanelsTopLeft size={20}/> 新しいウィンドウへ <ArrowUpRight size={16}/></button>{state.windows.filter(w => w.id !== state.windowId).map(w => <button className="move-option" key={w.id} onClick={() => { setModal(null); void run(() => api.move(doc.id,w.id), 'ウィンドウへ移動しています…'); }}><Copy size={18}/><span>{w.title}</span><ChevronRight size={15}/></button>)}</div></Modal>}

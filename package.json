@@ -1,6 +1,6 @@
 {
   "name": "folio-pdf",
-  "version": "1.0.0",
+  "version": "1.2.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -11,6 +11,7 @@
     "dist:win": "node scripts/tauri.mjs build --bundles nsis -- --locked",
     "test": "node --test tests/*.test.ts",
     "test:smoke": "node scripts/smoke.mjs",
+    "test:print": "node scripts/print-smoke.mjs",
     "test:native": "node scripts/native-smoke.mjs",
     "check:rust": "node scripts/tauri.mjs check",
     "test:rust": "node scripts/tauri.mjs test"

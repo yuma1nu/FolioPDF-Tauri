@@ -37,10 +37,7 @@ export interface Bridge {
   settings(value: Partial<Settings>): Promise<void>;
   clearHistory(): Promise<void>;
   external(url: string): Promise<void>;
-  printBegin(id: string): Promise<string>;
-  printPage(job: string, index: number, data: Uint8Array, width: number, height: number): Promise<void>;
-  printEnd(job: string): Promise<string>;
-  printCancel(job: string): Promise<void>;
+  print(id: string, password?: string): Promise<void>;
   confirm(message: string): Promise<boolean>;
   minimize(): void;
   maximize(): void;

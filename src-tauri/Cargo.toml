@@ -1,6 +1,6 @@
 [package]
 name = "folio-pdf"
-version = "1.0.0"
+version = "1.2.0"
 description = "Folio PDF"
 edition = "2021"
 
@@ -19,5 +19,5 @@ tokio = { version = "1", features = ["sync", "time"] }
 uuid = { version = "1", features = ["v4"] }
 
 [target.'cfg(windows)'.dependencies]
-webview2-com = "0.39"
-windows = { version = "0.62", features = ["Win32_Foundation"] }
+png = "0.18"
+windows = { version = "0.62", features = ["Win32_Foundation", "Win32_Graphics_Gdi", "Win32_Graphics_Printing", "Win32_Storage_Xps", "Win32_System_Com"] }

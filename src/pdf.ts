@@ -1,13 +1,12 @@
-import { getDocument, GlobalWorkerOptions, PermissionFlag, type PDFDocumentProxy, type PDFPageProxy } from 'pdfjs-dist';
-import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
+import { PermissionFlag, type PDFDocumentProxy, type PDFPageProxy } from 'pdfjs-dist';
 import { EventBus, PDFViewer, PDFLinkService, PDFFindController } from 'pdfjs-dist/web/pdf_viewer.mjs';
 import type { Doc, PageRef, View } from './shared';
-GlobalWorkerOptions.workerSrc = workerUrl;
-const base = new URL('./pdf-assets/', location.href).href;
-export type PdfSource = { id: string; pdf: PDFDocumentProxy; printAllowed: boolean };
+import { createPdfTask } from './pdf-source';
+export type PdfSource = { id: string; pdf: PDFDocumentProxy; printAllowed: boolean; password?: string };
 export async function loadPdf(doc: Doc, password: (retry: boolean) => Promise<string>): Promise<PdfSource> {
-  const task = getDocument({ data: await window.folio.read(doc.id), cMapUrl: `${base}cmaps/`, cMapPacked: true, standardFontDataUrl: `${base}standard_fonts/`, wasmUrl: `${base}wasm/`, enableXfa: false });
-  task.onPassword = (update: (value: string) => void, reason: number) => { password(reason === 2).then(update).catch(() => { void task.destroy(); }); };
+  const task = createPdfTask(await window.folio.read(doc.id));
+  let secret: string | undefined;
+  task.onPassword = (update: (value: string) => void, reason: number) => { password(reason === 2).then(value => { secret = value; update(value); }).catch(() => { void task.destroy(); }); };
   const pdf = await task.promise;
   const permissions = await pdf.getPermissions();
   const printAllowed = !permissions || permissions.includes(PermissionFlag.PRINT) || permissions.includes(PermissionFlag.PRINT_HIGH_QUALITY);
@@ -17,7 +16,7 @@ export async function loadPdf(doc: Doc, password: (retry: boolean) => Promise<st
     for (let i = 1; i <= pdf.numPages; i++) rotations.push((await pdf.getPage(i)).rotate);
     await window.folio.initialize(doc.id, pdf.numPages, rotations, restricted, printAllowed);
   } else await window.folio.initialize(doc.id, pdf.numPages, Array(pdf.numPages).fill(0), restricted, printAllowed);
-  return { id: doc.id, pdf, printAllowed };
+  return { id: doc.id, pdf, printAllowed, password: secret };
 }
 // Bind methods to their real PDF.js instances: its private fields cannot be accessed through a Proxy.
 export function mappedDocument(pdf: PDFDocumentProxy, pages: PageRef[]): PDFDocumentProxy {

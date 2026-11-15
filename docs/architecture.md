@@ -10,10 +10,18 @@ Rust の `main.rs` はファイル選択、選択済み PDF の読み取り、�
 
 ネイティブのファイルドロップを有効にして実際のパスを取得します。ページ整理のドラッグは Pointer Events を使い、Windows WebView2 のネイティブファイルドロップと共存させます。`tauri-plugin-single-instance` が追加起動のコマンドラインを既存プロセスへ渡し、NSIS が PDF の関連付け候補を登録します。
 
-`printing.rs` はウィンドウごとに印刷ジョブを所有し、PNG とページ寸法を一時ディレクトリへ保存します。`print.html` と `src/print.ts` が専用ウィンドウにページを準備し、WebView2 の `ICoreWebView2_16::ShowPrintUI` を使って Windows の印刷ダイアログを表示します。印刷ジョブの元ウィンドウを閉じても、表示済みの印刷ウィンドウは利用できます。一時画像は印刷ウィンドウの終了時に削除します。
+`printing.rs` は元 PDF のスナップショットと現在のページ対応表を受け取り、全ページの画像化を待たずに印刷画面を開きます。`print.html` と `src/print.ts` は PDF.js で最大 220×280 ピクセルのプレビューを表示範囲から描画します。画面外のキャンバスと PDF.js のページキャッシュを解放し、表示ページ数に応じたメモリー使用量に抑えます。
+
+`print-selection.ts` はページ番号入力とプレビューの選択を文書順のページ番号へ変換します。実際の印刷操作で初めて選択ページだけを印刷品質で描画し、PNG と用紙寸法を一時ディレクトリへ保存します。印刷対象の世代番号を検証して、キャンセル前の古いページが再実行した印刷へ混ざることを防ぎます。印刷用 DOM はプレビューと分離し、選択ページの PDF 出力検証にも使います。
+
+`native_printer.rs` は Windows のプリンター列挙、ドライバー設定、GDI による直接送信を担当します。`DocumentPropertiesW` から取得する DEVMODE はドライバー固有領域も含めて保持します。「ドライバー設定」は専用 STA スレッドで `DM_IN_PROMPT` を付けて開き、OK 時だけ今回の設定を更新します。`SetPrinter` による既定設定の変更はしません。設定の世代番号も検証し、準備中のプリンター切り替えや二重送信を防ぎます。
+
+送信は `CreateDCW` にその設定を渡し、`StartDocW`、`StartPage`、`StretchDIBits`、`EndPage`、`EndDoc` で行います。WebView2 の `ShowPrintUI` は呼びません。用紙・両面・トレイはドライバー設定に従い、印字可能領域と DPI から「用紙に合わせる／実際のサイズ」の配置を求めます。送信処理はブロッキングワーカーへ移し、中止フラグと `SetAbortProc`、エラー時の `AbortDoc` を備えます。送信中は一時ディレクトリを共有所有し、ウィンドウ終了時にも使用中の画像を先に削除しません。戻り値のジョブ番号はスプーラーの受け付け結果であり、物理出力の完了通知ではありません。
+
+印刷ジョブの元ウィンドウを閉じても、元データの転送完了後は印刷ウィンドウを独立して利用できます。パスワード付き PDF のパスワードは印刷ジョブのメモリー内でのみ扱い、設定や一時ファイルへ保存しません。PDF スナップショットと印刷画像は印刷ウィンドウの終了時（送信中なら中止処理後）に削除します。
 
 ファイル監視は別スレッドで更新時刻とサイズを比較し、表示用の元データを書き換えません。ネットワークファイルのメタデータ取得中は共有状態のロックを保持しません。権限のあるファイルでも、読み取りの前後でメタデータが変化した場合は再読み込みを案内します。
 
 設定ファイルの保存先はアプリ固有の AppData です。テスト時は `FOLIO_USER_DATA` と `WEBVIEW2_USER_DATA_FOLDER` で保存先を分離します。本番バイナリにテスト用の権限迂回 API は設けていません。
 
-API の参照：[Tauri の設定](https://v2.tauri.app/reference/config/)、[単一起動](https://v2.tauri.app/plugin/single-instance/)、[WebView2 の印刷](https://learn.microsoft.com/en-us/microsoft-edge/webview2/how-to/print)。
+API の参照：[Tauri の設定](https://v2.tauri.app/reference/config/)、[単一起動](https://v2.tauri.app/plugin/single-instance/)、[DocumentPropertiesW](https://learn.microsoft.com/en-us/windows/win32/printdocs/documentproperties)、[プリンター DC](https://learn.microsoft.com/en-us/windows/win32/printdocs/retrieving-a-printer-device-context)。

@@ -73,16 +73,33 @@ try {
   await poll(async()=>(await state(separate)).docs[0]?.pages.length===2);assert.equal((await state(separate)).settings.theme,'dark');
   await main.evaluate(()=>window.folio.settings({theme:'light'}));await separate.waitForFunction(()=>document.documentElement.dataset.theme==='light');
   // Prepare the actual print window and export it through CDP, without sending to a printer.
-  const printPagePromise=context.waitForEvent('page');await main.getByRole('button',{name:'印刷 (Ctrl+P)',exact:true}).click();const printing=await printPagePromise;
-  await printing.waitForFunction(()=>document.querySelector('#print')?.disabled===false,null,{timeout:60000});assert.equal(await printing.locator('section').count(),4);
-  const cdp=await context.newCDPSession(printing);const printed=await cdp.send('Page.printToPDF',{preferCSSPageSize:true,printBackground:true});
+  const previewStarted=Date.now(),printPagePromise=context.waitForEvent('page');await main.getByRole('button',{name:'印刷 (Ctrl+P)',exact:true}).click();const printing=await printPagePromise;
+  await printing.waitForFunction(()=>document.querySelector('#print')?.disabled===false,null,{timeout:60000});assert.equal(await printing.locator('.preview-tile').count(),4);
+  await printing.waitForFunction(()=>document.querySelector('.preview-tile canvas')?.width>0);
+  console.log(`Native print preview: ${Date.now()-previewStarted}ms`);
+  assert.equal((await invoke(printing,'print_payload')).preparedCount,0,'preview must not prepare print-resolution pages');
+  await assert.rejects(invoke(printing,'prepare_print',{selection:[]}),/ページ/);
+  await assert.rejects(invoke(printing,'direct_print',{revision:0,printerRevision:0,fit:true}),/完了/);
+  await assert.rejects(invoke(main,'read_print_source'),/印刷ウィンドウ/);
+  // Printer enumeration and DEVMODE loading are real; only the final spooler submission is substituted to avoid printing.
+  assert.ok((await invoke(printing,'get_printers')).printers.length>0,'Native smoke requires an installed printer (a virtual printer is sufficient).');
+  await printing.evaluate(()=>{const original=window.fetch.bind(window);window.__printSubmissionCount=0;window.fetch=(url,options)=>{if(String(url).endsWith('/direct_print')){window.__printSubmissionCount++;const count=document.querySelectorAll('.printed-page').length;return Promise.resolve(new Response(JSON.stringify({printer:document.querySelector('#printer').value,jobId:window.__printSubmissionCount,pages:count}),{status:200,headers:{'Tauri-Response':'ok','content-type':'application/json'}}));}return original(url,options);};});
+  await printing.getByRole('radio',{name:'指定ページ',exact:true}).check();await printing.locator('#range').fill('2-3');
+  await printing.getByRole('button',{name:'2ページ',exact:true}).click();await printing.getByRole('button',{name:'4ページ',exact:true}).click();assert.equal(await printing.locator('#range').inputValue(),'3-4');
+  await printing.locator('#range').fill('2-3');await printing.screenshot({path:path.join(output,'print-selection.png')});
+  await printing.getByRole('button',{name:'選択したページを印刷',exact:true}).click();await printing.waitForFunction(()=>document.body.dataset.preparing==='false');
+  assert.deepEqual(await printing.locator('.printed-page').evaluateAll(nodes=>nodes.map(n=>n.dataset.page)),['2','3']);assert.equal((await invoke(printing,'print_payload')).preparedCount,2);
+  const cdp=await context.newCDPSession(printing);const selectedOutput=await cdp.send('Page.printToPDF',{preferCSSPageSize:true,printBackground:true});
+  const selectedBytes=Buffer.from(selectedOutput.data,'base64');await writeFile(path.join(output,'selected-print-output.pdf'),selectedBytes);assert.equal((await PDFDocument.load(selectedBytes)).getPageCount(),2);
+  await printing.getByRole('radio',{name:'すべてのページ',exact:true}).check();await printing.getByRole('button',{name:'選択したページを印刷',exact:true}).click();await printing.waitForFunction(()=>document.body.dataset.preparing==='false');
+  const printed=await cdp.send('Page.printToPDF',{preferCSSPageSize:true,printBackground:true});
   const printedBytes=Buffer.from(printed.data,'base64');await writeFile(path.join(output,'print-output.pdf'),printedBytes);const printedPdf=await PDFDocument.load(printedBytes);
   assert.equal(printedPdf.getPageCount(),4);assert.ok(Math.abs(printedPdf.getPage(0).getWidth()-595)<1);
-  if(process.argv.includes('--inspect-print')){
-    console.log(`PRINT_DIALOG_CHECK: ${path.join(output,'continue')}`);
-    await Promise.race([invoke(printing,'show_print'),sleep(120000).then(()=>{throw new Error('Print dialog inspection timed out; run this check with the desktop unlocked.');})]);
-    await poll(async()=>{try{await readFile(path.join(output,'continue'));return true;}catch{return false;}},300000);
-  }
+  // An owner closed before handing over the source must not leave a permanently loading preview.
+  const emptyOwnerPromise=context.waitForEvent('page');await invoke(main,'create_window',{paths:[]});const emptyOwner=await emptyOwnerPromise;await emptyOwner.waitForSelector('.home');
+  const pendingPrintPromise=context.waitForEvent('page');await invoke(emptyOwner,'print_begin',{title:'未転送のPDF',pages:[{source:0,rotation:0}],password:null});const pendingPrint=await pendingPrintPromise;
+  await pendingPrint.waitForSelector('#status');await close(emptyOwner);await pendingPrint.waitForFunction(()=>document.querySelector('#status')?.textContent.includes('元のウィンドウが閉じられました'));
+  assert.equal(await pendingPrint.locator('#print').isDisabled(),true);await invoke(pendingPrint,'plugin:window|close',{label:await pendingPrint.evaluate(()=>window.__TAURI_INTERNALS__.metadata.currentWindow.label)}).catch(()=>{});
   await printing.screenshot({path:path.join(output,'print-preview.png')});await invoke(printing,'plugin:window|close',{label:await printing.evaluate(()=>window.__TAURI_INTERNALS__.metadata.currentWindow.label)}).catch(()=>{});
   await sleep(900);let saved=JSON.parse(await readFile(path.join(output,'session.json'),'utf8'));assert.equal(Object.keys(saved.windows).length,2);
   assert.ok(Object.values(saved.windows).every(w=>w.bounds.width>0&&w.bounds.height>0));

@@ -1003,8 +1003,9 @@ checksum = "77ce24cb58228fbb8aa041425bb1050850ac19177686ea6e0f41a70416f56fdb"
 
 [[package]]
 name = "folio-pdf"
-version = "1.0.0"
+version = "1.2.0"
 dependencies = [
+ "png",
  "serde",
  "serde_json",
  "tauri",
@@ -1015,7 +1016,6 @@ dependencies = [
  "tempfile",
  "tokio",
  "uuid",
- "webview2-com",
  "windows",
 ]
 

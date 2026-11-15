@@ -240,9 +240,14 @@ export const bridge: Bridge = {
   settings: async value => { const result = await native.invoke<{ settings: Settings; recent: Recent[] }>('preferences', { value }); settings = result.settings; recent = result.recent; emit(); },
   clearHistory: async () => { await native.invoke('preferences', { value: { clearHistory: true } }); views = {}; emit(); },
   external: url => native.invoke('external', { url }),
-  printBegin: async id => { const doc = get(id); if (!doc.printAllowed) throw new Error('このPDFの印刷は許可されていません。'); return native.invoke<string>('print_begin', { title: doc.name }); },
-  printPage: (job, index, data, width, height) => native.binary('print_page', data, { 'folio-print': asciiJson({ job, index, width, height }) }),
-  printEnd: job => native.invoke('print_end', { job }), printCancel: job => native.invoke('print_cancel', { job }),
+  print: async (id, password) => {
+    const doc = get(id);
+    if (!doc.printAllowed) throw new Error('このPDFの印刷は許可されていません。');
+    const pages = doc.pages.map(({ source, rotation }) => ({ source, rotation }));
+    const job = await native.invoke<string>('print_begin', { title: doc.name, pages, password: password ?? null });
+    try { await native.binary('print_source', doc.bytes, { 'folio-print-job': job }); }
+    catch (e) { await native.invoke('print_cancel', { job }).catch(report); throw e; }
+  },
   confirm: message => native.invoke<boolean>('confirm', { message }),
   minimize: () => { void native.minimize().catch(report); }, maximize: () => { void native.maximize().catch(report); },
   quit: () => { for (const fn of closeListeners) fn(); }
